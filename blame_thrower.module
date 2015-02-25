@@ -1,0 +1,224 @@
+<?php
+
+/**
+ * Implements hook_permissions
+ */
+function sp_invite_permission() {
+  return array(
+    'administer blame thrower' => array(
+      'title'       => t('Administer Blame Thrower'),
+      'description' => t('Perform administration tasks for blame thrower.'),
+    ),
+  );
+}
+
+function blame_thrower_menu() {
+  $items = array();
+
+  $items['admin/config/system/blame_thrower/settings'] = array(
+    'title'            => t('Blame Thrower Settings'),
+    'description'      => 'Configuration for invite a friend module',
+    'access callback'  => TRUE,
+    'page callback'    => 'drupal_get_form',
+    'page arguments'   => array('blame_thrower_settings'),
+    'access arguments' => array('administer blame thrower'),
+    'file'             => 'blame_thrower.admin.inc',
+    'type'             => MENU_NORMAL_ITEM,
+  );
+
+  return $items;
+}
+
+/******************************************************************************
+ * Logging Hooks
+ *****************************************************************************/
+
+/**
+ * Implements hook_entity_insert()
+ */
+function blame_thrower_entity_insert($entity, $type) {
+  blame_thrower_log_entity_action('insert', $entity, $type);
+}
+
+/**
+ * Implements hook_entity_update()
+ */
+function blame_thrower_entity_update($entity, $type) {
+  blame_thrower_log_entity_action('update', $entity, $type);
+}
+
+/**
+ * Implements hook_entity_delete()
+ */
+function blame_thrower_entity_delete($type, $id) {
+  blame_thrower_log_entity_action('delete', null, $type, $id);
+}
+
+/******************************************************************************
+ * Logging Utility Functions
+ *****************************************************************************/
+
+/**
+ * Common log function to append standard information
+ * @param $message
+ * @param $data_object
+ */
+function blame_thrower_log_entity_action($action, $entity, $type, $id = null) {
+  $blame_thrower_logging_enabled = variable_get('blame_thrower_logging_enabled', TRUE);
+
+  if($blame_thrower_logging_enabled) {
+    global $user;
+    $blame_thrower_logging_identity = variable_get('blame_thrower_logging_identity', 'blame_thrower');
+    $blame_thrower_logging_debug = variable_get('blame_thrower_logging_debug', TRUE);
+    $blame_thrower_logging_type_filter = variable_get('blame_thrower_logging_type_filter', "user\r\nnode\r\ntaxonomy_vocabulary\r\ntaxonomy_term");
+    $blame_thrower_logging_bundle_filter = variable_get('blame_thrower_logging_bundle_filter', "");
+
+    $type_filters =  explode("\r\n",$blame_thrower_logging_type_filter);
+
+
+    //filters are set and type does not match, do not log
+    if(count($type_filters) > 0 && !in_array($type, $type_filters)) {
+      //return;
+    }
+
+    //Entity is not passed on delete call
+    if($action == 'delete') {
+      $entity = entity_load($type, $id);
+    }
+
+    //Construct the message format based on parameters
+    $message = '%entity_type %id %action by uid: %uid, email: %email -- Bundle: %bundle, Title: %title%unknown';
+
+    //Get the entity info for more detailed message
+    $entity_info = blame_thower_extract_entity_info($entity, $type);
+
+    $bundle_filters = explode("\r\n", $blame_thrower_logging_bundle_filter);
+
+    //type is node and bundle filters are set and does not match, do not log
+    if($type == 'node' && count($bundle_filters) > 0 && !in_array($entity_info->type, $bundle_filters)) {
+      return;
+    }
+
+    //Construct the message parameters
+    $params = array(
+      '%entity_type' => $type,
+      '%action' => $action,
+      '%uid' => $user->uid,
+      '%email' => $user->mail,
+    );
+
+    if(isset($entity_info)) {
+      $params['%id'] = $entity_info->id;
+      $params['%bundle'] = $entity_info->type;
+      $params['%title'] = $entity_info->title;
+      $params['%unknown'] = '';
+    }
+    else {
+      //Case of not handled entity type
+      $params['%id'] = 'unknown';
+      $params['%bundle'] = 'unknown';
+      $params['%title'] = 'unknown';
+      $params['%unknown'] = ' ***unknown entity*** ' . print_r($entity, TRUE);
+    }
+
+
+
+    //Debug or not to debug entity details
+    if($blame_thrower_logging_debug) {
+      $message .= ', Entity debug: %entity';
+      $params['%entity'] = print_r($entity,TRUE);
+      watchdog($blame_thrower_logging_identity, $message, $params,  WATCHDOG_DEBUG);
+    }
+    else {
+      watchdog($blame_thrower_logging_identity, $message, $params, WATCHDOG_INFO);
+    }
+  }
+}
+
+/**
+ * Extract entity information based on type calls appropriate type function
+ * to extract the entity info for logging.
+ * @param $entity
+ * @param $entity_type
+ * @return \stdClass
+ */
+function blame_thower_extract_entity_info($entity, $entity_type) {
+  switch($entity_type) {
+    case 'node':
+      return blame_thrower_extract_node($entity);
+    case 'user':
+      return blame_thrower_extract_user($entity);
+    case 'taxonomy_term':
+      return blame_thrower_extract_taxonomy_term($entity);
+    case 'taxonomy_vocabulary':
+      return blame_thrower_extract_taxonomy_vocabulary($entity);
+    case 'comment':
+      return blame_thrower_extract_comment($entity);
+  }
+}
+
+/**
+ * Extract entity information for nodes.
+ * @param $node
+ * @return \stdClass
+ */
+function blame_thrower_extract_node($node) {
+  $entity_information = new stdClass();
+  $entity_information->id = $node->nid;
+  $entity_information->type = $node->type;
+  $entity_information->title = $node->title;
+  return $entity_information;
+}
+
+/**
+ * Extract entity information for user.
+ * @param $user
+ * @return \stdClass
+ */
+function blame_thrower_extract_user($user) {
+  $entity_information = new stdClass();
+  $entity_information->id = $user->uid;
+  $entity_information->type = 'user';
+  $entity_information->title = $user->name;
+  return $entity_information;
+}
+
+/**
+ * Extract entity information for term.
+ * @param $term
+ * @return \stdClass
+ */
+function blame_thrower_extract_taxonomy_term($term) {
+  $entity_information = new stdClass();
+  $entity_information->id = $term->tid;
+  $entity_information->type = $term->vid;
+  $entity_information->title = $term->name;
+  return $entity_information;
+}
+
+/**
+ * Extract entity information for vocabulary.
+ * @param $term
+ * @return \stdClass
+ */
+function blame_thrower_extract_taxonomy_vocabulary($vocabulary) {
+  $entity_information = new stdClass();
+  $entity_information->id = $vocabulary->vid;
+  $entity_information->type = 'vocabulary';
+  $entity_information->title = $vocabulary->name;
+  return $entity_information;
+}
+
+/**
+ * Extract entity information for comment
+ * @param $comment
+ * @return \stdClass
+ */
+function blame_thrower_extract_comment($comment) {
+  $entity_information = new stdClass();
+  $entity_information->id = $comment->cid;
+  $entity_information->type = 'comment';
+  $entity_information->title = $comment->subject;
+  return $entity_information;
+}
+
