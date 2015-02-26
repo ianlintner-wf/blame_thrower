@@ -50,8 +50,8 @@ function blame_thrower_entity_update($entity, $type) {
 /**
  * Implements hook_entity_delete()
  */
-function blame_thrower_entity_delete($type, $id) {
-  blame_thrower_log_entity_action('delete', null, $type, $id);
+function blame_thrower_entity_delete($entity, $type) {
+  blame_thrower_log_entity_action('delete', $entity, $type);
 }
 
 /******************************************************************************
@@ -74,16 +74,14 @@ function blame_thrower_log_entity_action($action, $entity, $type, $id = null) {
       $blame_thrower_logging_type_filter = variable_get('blame_thrower_logging_type_filter', "user\r\nnode\r\ntaxonomy_vocabulary\r\ntaxonomy_term");
       $blame_thrower_logging_bundle_filter = variable_get('blame_thrower_logging_bundle_filter', "");
 
-      $type_filters = explode("\r\n", $blame_thrower_logging_type_filter);
 
-      //filters are set and type does not match, do not log
-      if (count($type_filters) > 0 && !in_array($type, $type_filters)) {
-        return;
-      }
+      if(!empty($blame_thrower_logging_type_filter)) {
+        $type_filters = explode("\r\n", $blame_thrower_logging_type_filter);
 
-      //Entity is not passed on delete call
-      if ($action == 'delete') {
-        $entity = entity_load($type, $id);
+        //filters are set and type does not match, do not log
+        if (count($type_filters) > 0 && !in_array($type, $type_filters)) {
+          return;
+        }
       }
 
       //Construct the message format based on parameters
@@ -91,13 +89,14 @@ function blame_thrower_log_entity_action($action, $entity, $type, $id = null) {
 
       //Get the entity info for more detailed message
       $entity_info = blame_thower_extract_entity_info($entity, $type);
-
-      $bundle_filters = explode("\r\n", $blame_thrower_logging_bundle_filter);
-
-      //type is node and bundle filters are set and does not match, do not log
-      if ($type == 'node' && count($bundle_filters) > 0 && !in_array($entity_info->type, $bundle_filters)) {
-        return;
+      if(!empty($blame_thrower_logging_bundle_filter)) {
+        $bundle_filters = explode("\r\n", $blame_thrower_logging_bundle_filter);
+        //type is node and bundle filters are set and does not match, do not log
+        if ($type == 'node' && count($bundle_filters) > 0 && !in_array($entity_info->type, $bundle_filters)) {
+          return;
+        }
       }
+
 
       //Construct the message parameters
       $params = array(
@@ -156,6 +155,8 @@ function blame_thower_extract_entity_info($entity, $entity_type) {
       return blame_thrower_extract_taxonomy_vocabulary($entity);
     case 'comment':
       return blame_thrower_extract_comment($entity);
+    case 'file':
+      return blame_thrower_extract_file($entity);
   }
   return blame_thrower_unknown($entity);
 }
@@ -230,6 +231,14 @@ function blame_thrower_extract_comment($comment) {
   $entity_information->id = $comment->cid;
   $entity_information->type = 'comment';
   $entity_information->title = $comment->subject;
+  return $entity_information;
+}
+
+function blame_thrower_extract_file($file) {
+  $entity_information = new stdClass();
+  $entity_information->id = $file->fid;
+  $entity_information->type = 'file';
+  $entity_information->title = $file->filename;
   return $entity_information;
 }
 
