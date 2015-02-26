@@ -3,3 +3,5 @@ description = Custom content auditing.
 core = 7.x
 package = Connect
 configure = admin/config/system/blame_thrower/settings
+files[] = tests/module.test
+testing_api = 2.x
