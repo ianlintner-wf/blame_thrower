@@ -64,72 +64,76 @@ function blame_thrower_entity_delete($type, $id) {
  * @param $data_object
  */
 function blame_thrower_log_entity_action($action, $entity, $type, $id = null) {
-  $blame_thrower_logging_enabled = variable_get('blame_thrower_logging_enabled', TRUE);
+  try {
+    $blame_thrower_logging_enabled = variable_get('blame_thrower_logging_enabled', TRUE);
 
-  if($blame_thrower_logging_enabled) {
-    global $user;
-    $blame_thrower_logging_identity = variable_get('blame_thrower_logging_identity', 'blame_thrower');
-    $blame_thrower_logging_debug = variable_get('blame_thrower_logging_debug', TRUE);
-    $blame_thrower_logging_type_filter = variable_get('blame_thrower_logging_type_filter', "user\r\nnode\r\ntaxonomy_vocabulary\r\ntaxonomy_term");
-    $blame_thrower_logging_bundle_filter = variable_get('blame_thrower_logging_bundle_filter', "");
+    if ($blame_thrower_logging_enabled) {
+      global $user;
+      $blame_thrower_logging_identity = variable_get('blame_thrower_logging_identity', 'blame_thrower');
+      $blame_thrower_logging_debug = variable_get('blame_thrower_logging_debug', TRUE);
+      $blame_thrower_logging_type_filter = variable_get('blame_thrower_logging_type_filter', "user\r\nnode\r\ntaxonomy_vocabulary\r\ntaxonomy_term");
+      $blame_thrower_logging_bundle_filter = variable_get('blame_thrower_logging_bundle_filter', "");
 
-    $type_filters =  explode("\r\n",$blame_thrower_logging_type_filter);
+      $type_filters = explode("\r\n", $blame_thrower_logging_type_filter);
 
+      //filters are set and type does not match, do not log
+      if (count($type_filters) > 0 && !in_array($type, $type_filters)) {
+        return;
+      }
 
-    //filters are set and type does not match, do not log
-    if(count($type_filters) > 0 && !in_array($type, $type_filters)) {
-      return;
+      //Entity is not passed on delete call
+      if ($action == 'delete') {
+        $entity = entity_load($type, $id);
+      }
+
+      //Construct the message format based on parameters
+      $message = '%entity_type %id %action by uid: %uid, email: %email -- Bundle: %bundle, Title: %title%unknown';
+
+      //Get the entity info for more detailed message
+      $entity_info = blame_thower_extract_entity_info($entity, $type);
+
+      $bundle_filters = explode("\r\n", $blame_thrower_logging_bundle_filter);
+
+      //type is node and bundle filters are set and does not match, do not log
+      if ($type == 'node' && count($bundle_filters) > 0 && !in_array($entity_info->type, $bundle_filters)) {
+        return;
+      }
+
+      //Construct the message parameters
+      $params = array(
+        '%entity_type' => $type,
+        '%action'      => $action,
+        '%uid'         => $user->uid,
+        '%email'       => $user->mail,
+      );
+
+      if (isset($entity_info)) {
+        $params['%id'] = $entity_info->id;
+        $params['%bundle'] = $entity_info->type;
+        $params['%title'] = $entity_info->title;
+        $params['%unknown'] = '';
+      }
+      else {
+        //Case of not handled entity type
+        $params['%id'] = 'unknown';
+        $params['%bundle'] = 'unknown';
+        $params['%title'] = 'unknown';
+        $params['%unknown'] = ' ***unknown entity*** ' . print_r($entity, TRUE);
+      }
+
+      //Debug or not to debug entity details
+      if ($blame_thrower_logging_debug) {
+        $message .= ', Entity debug: %entity';
+        $params['%entity'] = print_r($entity, TRUE);
+        watchdog($blame_thrower_logging_identity, $message, $params, WATCHDOG_DEBUG);
+      }
+      else {
+        watchdog($blame_thrower_logging_identity, $message, $params, WATCHDOG_INFO);
+      }
     }
-
-    //Entity is not passed on delete call
-    if($action == 'delete') {
-      $entity = entity_load($type, $id);
-    }
-
-    //Construct the message format based on parameters
-    $message = '%entity_type %id %action by uid: %uid, email: %email -- Bundle: %bundle, Title: %title%unknown';
-
-    //Get the entity info for more detailed message
-    $entity_info = blame_thower_extract_entity_info($entity, $type);
-
-    $bundle_filters = explode("\r\n", $blame_thrower_logging_bundle_filter);
-
-    //type is node and bundle filters are set and does not match, do not log
-    if($type == 'node' && count($bundle_filters) > 0 && !in_array($entity_info->type, $bundle_filters)) {
-      return;
-    }
-
-    //Construct the message parameters
-    $params = array(
-      '%entity_type' => $type,
-      '%action' => $action,
-      '%uid' => $user->uid,
-      '%email' => $user->mail,
-    );
-
-    if(isset($entity_info)) {
-      $params['%id'] = $entity_info->id;
-      $params['%bundle'] = $entity_info->type;
-      $params['%title'] = $entity_info->title;
-      $params['%unknown'] = '';
-    }
-    else {
-      //Case of not handled entity type
-      $params['%id'] = 'unknown';
-      $params['%bundle'] = 'unknown';
-      $params['%title'] = 'unknown';
-      $params['%unknown'] = ' ***unknown entity*** ' . print_r($entity, TRUE);
-    }
-
-    //Debug or not to debug entity details
-    if($blame_thrower_logging_debug) {
-      $message .= ', Entity debug: %entity';
-      $params['%entity'] = print_r($entity,TRUE);
-      watchdog($blame_thrower_logging_identity, $message, $params,  WATCHDOG_DEBUG);
-    }
-    else {
-      watchdog($blame_thrower_logging_identity, $message, $params, WATCHDOG_INFO);
-    }
+  }
+  catch(Exception $ex) {
+    watchdog('blame_thrower', 'Error in blame_thrower logging: %ex', array('%ex' => print_r($ex, TRUE)), WATCHDOG_ERROR);
   }
 }
 
