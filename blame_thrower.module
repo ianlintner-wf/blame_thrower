@@ -78,7 +78,7 @@ function blame_thrower_log_entity_action($action, $entity, $type, $id = null) {
 
     //filters are set and type does not match, do not log
     if(count($type_filters) > 0 && !in_array($type, $type_filters)) {
-      //return;
+      return;
     }
 
     //Entity is not passed on delete call
@@ -121,8 +121,6 @@ function blame_thrower_log_entity_action($action, $entity, $type, $id = null) {
       $params['%unknown'] = ' ***unknown entity*** ' . print_r($entity, TRUE);
     }
 
-
-
     //Debug or not to debug entity details
     if($blame_thrower_logging_debug) {
       $message .= ', Entity debug: %entity';
@@ -155,6 +153,15 @@ function blame_thower_extract_entity_info($entity, $entity_type) {
     case 'comment':
       return blame_thrower_extract_comment($entity);
   }
+  return blame_thrower_unknown($entity);
+}
+
+function blame_thrower_unknown($entity) {
+  $entity_information = new stdClass();
+  $entity_information->id = 'unknown';
+  $entity_information->type = 'unknown';
+  $entity_information->title = 'unknown';
+  return $entity_information;
 }
 
 /**
