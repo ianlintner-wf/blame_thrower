@@ -16,7 +16,7 @@ class BlameThrowerTestCase extends DrupalWebTestCase {
     // Create and log in our user. The user has the arbitrary privilege
     // 'extra special edit any simpletest_example' which the code uses
     // to grant access.
-    $this->privileged_user = $this->drupalCreateUser(array('administrator'));
+    $this->privileged_user = $this->drupalCreateUser(array('create page content'));
     $this->drupalLogin($this->privileged_user);
   }
 
@@ -26,14 +26,15 @@ class BlameThrowerTestCase extends DrupalWebTestCase {
     $edit = array();
     $edit['title'] = $this->randomName(8);
     $edit["body[und][0][value]"] = $this->randomName(16);
-    $this->drupalPost('node/add/simpletest-example', $edit, t('Save'));
+    $this->drupalPost('node/add/blame_thrower', $edit, t('Save'));
     $this->assertText(t('Page Node Type @title has been created.', array('@title' => $edit['title'])));
+    $this->assertW
   }
 
   // Create a simpletest_example node and then see if our user can edit it
   public function testSimpleTestExampleEdit() {
     $settings = array(
-      'type' => 'simpletest_example',
+      'type' => 'page',
       'title' => $this->randomName(32),
       'body' => array(LANGUAGE_NONE => array(array($this->randomName(64)))),
     );
@@ -41,22 +42,13 @@ class BlameThrowerTestCase extends DrupalWebTestCase {
 
     // For debugging, we might output the node structure with $this->verbose()
     $this->verbose('Node created: ' . var_export($node, TRUE));
-    // It would only be output if the testing settings had 'verbose' set.
 
-    // We'll run this test normally, but not on the testbot, as it would
-    // indicate that the examples module was failing tests.
     if (!$this->runningOnTestbot()) {
-      // The debug() statement will output information into the test results.
-      // It can also be used in Drupal 7 anywhere in code and will come out
-      // as a drupal_set_message().
       debug('We are not running on the PIFR testing server, so will go ahead and catch the failure.');
       $this->drupalGet("node/{$node->nid}/edit");
-      // Make sure we don't get a 401 unauthorized response:
       $this->assertResponse(200, 'User is allowed to edit the content.');
-
-      // Looking for title text in the page to determine whether we were
-      // successful opening edit form.
       $this->assertText(t("@title", array('@title' => $settings['title'])), "Found title in edit form");
+      $this->assertTrue(checkWatdogExists('blame_thrower','insert'), 'Node Insert Watchdog');
     }
   }
 
@@ -70,6 +62,16 @@ class BlameThrowerTestCase extends DrupalWebTestCase {
    */
   public function runningOnTestbot() {
     return (file_exists("../checkout") || file_exists("../site_under_test"));
+  }
+
+  public function checkWatchdogExists($type, $message) {
+    $this->messages = array();
+    $result = db_query("SELECT * FROM {watchdog} WHERE type = '$type' AND message LIKE '%$message%' ORDER BY timestamp ASC");
+
+    while ($row = db_fetch_object($result)) {
+      return true;
+    }
+    return false;
   }
 }
 
