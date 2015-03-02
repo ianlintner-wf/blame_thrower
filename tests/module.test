@@ -28,7 +28,7 @@ class BlameThrowerTestCase extends DrupalWebTestCase {
     $edit["body[und][0][value]"] = $this->randomName(16);
     $this->drupalPost('node/add/blame_thrower', $edit, t('Save'));
     $this->assertText(t('Page Node Type @title has been created.', array('@title' => $edit['title'])));
-    $this->assertW
+    $this->checkWatchdogExists('blame_thrower','insert');
   }
 
 
