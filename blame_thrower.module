@@ -110,7 +110,7 @@ function blame_thrower_log_entity_action($action, $entity, $type, $id = null) {
         $params['%uid'] = 'no uid';
       }
       if(isset($user->mail)) {
-        $params['%email'] = $user->mail
+        $params['%email'] = $user->mail;
       }
       else {
         $params['%email'] = 'no email';
