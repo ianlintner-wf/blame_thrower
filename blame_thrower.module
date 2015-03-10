@@ -3,7 +3,7 @@
 /**
  * Implements hook_permissions
  */
-function sp_invite_permission() {
+function blame_thrower_permission() {
   return array(
     'administer blame thrower' => array(
       'title'       => t('Administer Blame Thrower'),
